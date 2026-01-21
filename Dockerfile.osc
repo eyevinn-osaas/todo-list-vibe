@@ -1,0 +1,48 @@
+FROM node:18-alpine
+
+# Install bash (required for OSC entrypoint script)
+RUN apk add --no-cache bash
+
+# Create app directory
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodeuser -u 1001 -G nodejs
+
+# Copy package files
+COPY backend/package*.json ./backend/
+
+# Install dependencies
+WORKDIR /app/backend
+RUN npm ci --only=production && npm cache clean --force
+
+# Copy application code
+COPY backend/ ./
+
+# Copy frontend directory to the correct location
+WORKDIR /app
+COPY frontend/ ./frontend/
+
+# Add OSC entrypoint script for configuration (before USER directive)
+COPY --chmod=755 osc-entrypoint.sh /usr/local/bin/osc-entrypoint.sh
+
+# Set proper ownership for non-root user
+RUN chown -R nodeuser:nodejs /app
+
+# Switch to non-root user
+USER nodeuser
+
+# Set working directory to backend for server execution
+WORKDIR /app/backend
+
+# Expose port
+EXPOSE 8080
+
+# Set environment variables for container port
+ENV PORT=8080
+ENV NODE_ENV=production
+
+# Set entrypoint
+ENTRYPOINT ["/usr/local/bin/osc-entrypoint.sh"]
+CMD ["node", "server.js"]
